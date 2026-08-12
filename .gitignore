@@ -1,0 +1,9 @@
+/build/
+/.vs/
+/.vscode/
+/cam86-view-old/
+*.fit
+*.fits
+*.drk
+cam86.ini
+
