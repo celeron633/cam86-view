@@ -110,3 +110,17 @@ SUBSYSTEM=="usb", ATTR{idVendor}=="0403", ATTR{idProduct}=="6010", ATTR{serial}=
 - `Timer2`：检查相机状态并触发下一帧，现由每帧 UI tick 和 `CameraState` 驱动；
 - `Timer3`：连拍间隔计时，现由 `std::chrono::steady_clock` 驱动；
 - `OpenDialog1`：旧版只用于加载 `.drk`，现由右侧 `Load dark...` 打开跨平台 ImGui 文件选择器。
+
+## 自动构建 Release ZIP
+
+GitHub Actions 的 `Windows Release` 工作流会在 push、pull request 和手动触发时构建 Windows x64 Release，运行核心测试，并上传 `cam86-view-windows-x64-<commit>.zip`。在仓库 Actions 页面打开成功的运行，从 Artifacts 下载 ZIP（保留 30 天）。
+
+ZIP 包含 EXE、运行说明及许可证。构建静态链接 Microsoft C++ 运行库；真机仍需安装 FTDI D2XX 驱动，程序使用系统的 64 位 DLL。
+
+本地已完成 Release 构建时，也可打包：
+
+```powershell
+.github/scripts/package-windows.ps1 -Version 0.2.0
+```
+
+生成的 ZIP 位于 `dist/`。

@@ -1,0 +1,53 @@
+name: Windows Release
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and package Windows x64
+    runs-on: windows-2022
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Configure Release
+        run: >-
+          cmake -S . -B build/windows -G "Visual Studio 17 2022" -A x64
+          -DCAM86_ENABLE_LIBUSB=OFF
+          -DCAM86_BUILD_TESTS=ON
+          -DBUILD_SHARED_LIBS=OFF
+          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+
+      - name: Build Release
+        run: cmake --build build/windows --config Release --parallel
+
+      - name: Run core tests
+        run: ctest --test-dir build/windows -C Release --output-on-failure --no-tests=error
+
+      - name: Package ZIP
+        id: package
+        run: |
+          $version = $env:GITHUB_SHA.Substring(0, 7)
+          $package = & .github/scripts/package-windows.ps1 -Version $version
+          "path=$($package.FullName)" >> $env:GITHUB_OUTPUT
+
+      - name: Upload ZIP
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ steps.package.outputs.path }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 30
