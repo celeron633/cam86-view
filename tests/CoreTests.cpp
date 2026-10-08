@@ -2,6 +2,7 @@
 #include "cam86/camera/ICamera.hpp"
 #include "cam86/image/ImageProcessor.hpp"
 #include "cam86/usb/FtdiProtocol.hpp"
+#include "cam86/usb/IUsbTransport.hpp"
 
 #include <cstdint>
 #include <atomic>
@@ -43,6 +44,66 @@ void testSpiWaveformAndResponse() {
     }
     require(cam86::protocol::decodeSpiResponse(response) == expected,
             "SPI response sampling differs from the Delphi Word[] buffer behavior");
+}
+
+class StartupTransport final : public cam86::IUsbTransport {
+public:
+    void open(std::uint16_t, std::uint16_t, const std::string&) override { open_ = true; }
+    void close() noexcept override { open_ = false; }
+    bool isOpen() const noexcept override { return open_; }
+    void reset(cam86::FtdiChannel) override {}
+    void purge(cam86::FtdiChannel, bool, bool) override {}
+    void setLatency(cam86::FtdiChannel, std::uint8_t) override {}
+    void setBaudRate(cam86::FtdiChannel, std::uint32_t) override {}
+    void setBitMode(cam86::FtdiChannel, std::uint8_t, std::uint8_t) override {}
+    void write(cam86::FtdiChannel channel, std::span<const std::uint8_t> bytes,
+               std::chrono::milliseconds) override {
+        require(open_ && channel == cam86::FtdiChannel::B, "Startup must write channel B");
+        if (bytes.size() == 64) {
+            // Sample SDATA at rising SCLK edges while AD9822 chip select is low.
+            std::uint16_t serialWord = 0;
+            int clocks = 0;
+            for (std::size_t i = 1; i < bytes.size(); ++i) {
+                if ((bytes[i] & 1U) == 0 && (bytes[i - 1] & 2U) == 0 && (bytes[i] & 2U) != 0) {
+                    serialWord = static_cast<std::uint16_t>((serialWord << 1U) |
+                                                           ((bytes[i] & 4U) != 0 ? 1U : 0U));
+                    ++clocks;
+                }
+            }
+            require(clocks == 16, "AD9822 register write must clock 16 bits");
+            registers.push_back(serialWord);
+        } else {
+            require(bytes.size() == 100, "Unexpected startup transfer length");
+            require(registers == std::vector<std::uint16_t>({0x00D8, 0x10A0, 0x3000, 0x610C}),
+                    "Controller startup ran before the complete legacy AD9822 initialization");
+            ++controllerCommands;
+        }
+    }
+    std::vector<std::uint8_t> read(cam86::FtdiChannel channel, std::size_t size,
+                                  std::chrono::milliseconds) override {
+        require(channel == cam86::FtdiChannel::B && size == 100, "Unexpected startup read");
+        return std::vector<std::uint8_t>(size, 0);
+    }
+    bool open_ = false;
+    std::vector<std::uint16_t> registers;
+    int controllerCommands = 0;
+};
+
+void testColdBootInitialization() {
+    auto transport = std::make_unique<StartupTransport>();
+    auto* recorded = transport.get();
+    auto camera = cam86::makeCam86Camera(std::move(transport));
+    for (int connection = 0; connection < 2; ++connection) {
+        recorded->registers.clear();
+        recorded->controllerCommands = 0;
+        camera->connect();
+        require(camera->isConnected() && recorded->controllerCommands == 1,
+                "Cold boot must complete ADC and controller initialization");
+        camera->connect();
+        require(recorded->registers.size() == 4, "An already connected camera was initialized again");
+        camera->disconnect();
+        require(!camera->isConnected() && !recorded->isOpen(), "Disconnect must close the transport");
+    }
 }
 
 void putWord(std::vector<std::uint8_t>& bytes, const std::size_t wordIndex,
@@ -99,6 +160,7 @@ int main() {
     try {
         testFtdiStatusStripping();
         testSpiWaveformAndResponse();
+        testColdBootInitialization();
         testUnbinnedFrameDecode();
         testBinnedFrameDecode();
         testDemoCapturePipeline();

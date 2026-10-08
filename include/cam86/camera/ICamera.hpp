@@ -34,6 +34,9 @@ public:
 
 std::unique_ptr<ICamera> makeSimulatedCamera();
 std::unique_ptr<ICamera> makeCam86Camera();
+class IUsbTransport;
+// Supply a transport for protocol testing without a physical camera.
+std::unique_ptr<ICamera> makeCam86Camera(std::unique_ptr<IUsbTransport> transport);
 [[nodiscard]] bool libusbBackendAvailable() noexcept;
 [[nodiscard]] bool hardwareBackendAvailable() noexcept;
 [[nodiscard]] const char* hardwareBackendName() noexcept;

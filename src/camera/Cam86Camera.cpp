@@ -11,6 +11,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <thread>
+#include <utility>
 
 namespace cam86::protocol {
 namespace {
@@ -158,6 +159,8 @@ using namespace std::chrono_literals;
 class Cam86Camera final : public ICamera {
 public:
     Cam86Camera() = default;
+    explicit Cam86Camera(std::unique_ptr<IUsbTransport> transport)
+        : transport_(std::move(transport)) {}
     ~Cam86Camera() override { disconnect(); }
 
     [[nodiscard]] CameraInfo info() const override {
@@ -167,11 +170,13 @@ public:
     void connect() override {
         std::scoped_lock lock(ioMutex_);
         if (connected_) return;
+        if (!transport_) {
 #ifdef _WIN32
         transport_ = makeD2xxFtdiTransport();
 #else
         transport_ = makeLibusbFtdiTransport();
 #endif
+        }
         try {
             transport_->open(0x0403, 0x6010, "CAM86");
             transport_->setBitMode(FtdiChannel::B, 0xBF, 0x04);
@@ -181,6 +186,9 @@ public:
             transport_->purge(FtdiChannel::A, true, true);
             transport_->purge(FtdiChannel::B, true, true);
             writeAd9822(0, 0xD8);
+            // Legacy CAM86 EXE (0x464D99): register 1 must also be initialized.
+            // Otherwise cold boot depends on the state left by another application.
+            writeAd9822(1, 0xA0);
             setGainLocked(0);
             setOffsetLocked(-6);
             std::this_thread::sleep_for(100ms);
@@ -190,7 +198,6 @@ public:
             connected_ = true;
         } catch (...) {
             transport_->close();
-            transport_.reset();
             throw;
         }
     }
@@ -199,7 +206,6 @@ public:
         std::scoped_lock lock(ioMutex_);
         connected_ = false;
         if (transport_) transport_->close();
-        transport_.reset();
     }
 
     [[nodiscard]] bool isConnected() const noexcept override { return connected_; }
@@ -342,6 +348,11 @@ private:
 } // namespace
 
 std::unique_ptr<ICamera> makeCam86Camera() { return std::make_unique<Cam86Camera>(); }
+
+std::unique_ptr<ICamera> makeCam86Camera(std::unique_ptr<IUsbTransport> transport) {
+    if (!transport) throw std::invalid_argument("CAM86 transport must not be null");
+    return std::make_unique<Cam86Camera>(std::move(transport));
+}
 
 bool libusbBackendAvailable() noexcept {
 #if CAM86_HAS_LIBUSB
