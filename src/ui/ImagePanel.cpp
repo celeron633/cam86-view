@@ -1,5 +1,6 @@
 #include "ui/ImagePanel.hpp"
 #include "ui/HistogramDialog.hpp"
+#include "ui/SelectionDialog.hpp"
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -15,9 +16,14 @@ ImagePanel::ImagePanel(AppState& state, View view, QWidget* parent)
         setCursor(Qt::PointingHandCursor);
         setToolTip("Click to open detailed RGB histogram with mouse tracking");
     }
+    if (view == View::Crop) {
+        setCursor(Qt::PointingHandCursor);
+        setToolTip("Click to inspect enlarged pixels with mouse tracking");
+    }
 }
 void ImagePanel::refresh() {
     if (histogramDialog_ && histogramDialog_->isVisible()) histogramDialog_->refresh();
+    if (selectionDialog_ && selectionDialog_->isVisible()) selectionDialog_->refresh();
     if (revision_ == state_.image.revision()) return;
     revision_ = state_.image.revision();
     if (state_.image.hasImage() && view_ != View::Histogram) {
@@ -67,6 +73,15 @@ void ImagePanel::paintEvent(QPaintEvent*) {
     }
 }
 void ImagePanel::mousePressEvent(QMouseEvent* event) {
+    if (view_ == View::Crop && event->button() == Qt::LeftButton) {
+        if (!selectionDialog_) selectionDialog_ = new SelectionDialog(state_, this);
+        selectionDialog_->refresh();
+        selectionDialog_->show();
+        selectionDialog_->raise();
+        selectionDialog_->activateWindow();
+        event->accept();
+        return;
+    }
     if (view_ == View::Histogram && event->button() == Qt::LeftButton) {
         if (!histogramDialog_) histogramDialog_ = new HistogramDialog(state_, this);
         histogramDialog_->refresh();

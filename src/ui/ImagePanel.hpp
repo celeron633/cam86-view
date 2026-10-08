@@ -6,6 +6,7 @@
 
 namespace cam86::ui {
 class HistogramDialog;
+class SelectionDialog;
 class ImagePanel : public QWidget {
 public:
     enum class View { Main, Crop, Histogram };
@@ -21,5 +22,6 @@ private:
     QImage image_;
     std::uint64_t revision_ = 0;
     QPointer<HistogramDialog> histogramDialog_;
+    QPointer<SelectionDialog> selectionDialog_;
 };
 }

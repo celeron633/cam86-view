@@ -2,6 +2,10 @@
 #include "ui/MainWindow.hpp"
 #include "ui/ImagePanel.hpp"
 #include "ui/HistogramDialog.hpp"
+#include "ui/SelectionDialog.hpp"
+#include <QCheckBox>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QApplication>
 #include <QComboBox>
 #include <QButtonGroup>
@@ -60,6 +64,22 @@ int main(int argc, char** argv) {
         openHistogram();
         require(window.findChildren<QWidget*>("histogramDialog").size() == 1 && dialog->isVisible(),
             "Repeated histogram clicks must reuse the window");
+        auto* selection = window.findChild<QWidget*>("selectionPreview");
+        require(selection != nullptr, "Selection preview missing");
+        const auto openSelection = [&] {
+            const QPointF position(selection->rect().center());
+            QMouseEvent event(QEvent::MouseButtonPress, position, selection->mapToGlobal(position),
+                Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(selection, &event);
+            QApplication::processEvents();
+        };
+        openSelection();
+        auto* inspector = dynamic_cast<cam86::ui::SelectionDialog*>(window.findChild<QWidget*>("selectionDialog"));
+        require(inspector && inspector->isVisible() && !inspector->isModal(), "Pixel inspector did not open");
+        require(inspector->findChild<QLabel*>("selectionSource")->text().contains("No image"), "Pixel inspector empty state missing");
+        inspector->close();
+        openSelection();
+        require(window.findChildren<QWidget*>("selectionDialog").size() == 1, "Pixel inspector window not reused");
         auto* connect = window.findChild<QPushButton*>("connectButton");
         auto* capture = window.findChild<QPushButton*>("captureButton");
         auto* stop = window.findChild<QPushButton*>("stopButton");
@@ -74,6 +94,8 @@ int main(int argc, char** argv) {
         require(state.image.hasImage() && state.image.previewRgba().size() == 900 * 600 * 4,
             "Missing image preview");
         window.tick();
+        require(!inspector->findChild<QLabel*>("selectionSource")->text().contains("No image"),
+            "Pixel inspector did not refresh after capture");
         require(dialog->findChild<QLabel*>("histogramSource")->text().contains("540000"),
             "Open histogram did not refresh after capture");
         auto* plot = dialog->findChild<QWidget*>("rgbHistogramPlot");
@@ -114,6 +136,54 @@ int main(int argc, char** argv) {
         QApplication::sendEvent(image, &click);
         require(std::abs(state.image.selectionX() - 750) < 5 &&
                 std::abs(state.image.selectionY() - 500) < 5, "Image selection mapping failed");
+        window.tick();
+        auto* pixelView = inspector->findChild<QWidget*>("selectionPixelView");
+        auto* pixelPosition = inspector->findChild<QLabel*>("selectionPosition");
+        auto* pixelValues = inspector->findChild<QLabel*>("selectionValues");
+        auto* pixelZoom = inspector->findChild<QComboBox*>("selectionZoom");
+        const auto inspectPixel = [&](int x, int y, int scale) {
+            const QPointF position((pixelView->width() - 50 * scale) / 2 + (x + 0.5) * scale,
+                                   (pixelView->height() - 50 * scale) / 2 + (y + 0.5) * scale);
+            QMouseEvent move(QEvent::MouseMove, position, pixelView->mapToGlobal(position),
+                Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+            QApplication::sendEvent(pixelView, &move);
+            const int originX = std::clamp(state.image.selectionX() - 25, 0, cam86::kSensorWidth - 50);
+            const int originY = std::clamp(state.image.selectionY() - 25, 0, cam86::kSensorHeight - 50);
+            require(pixelPosition->text() == QString("Crop: (%1, %2)   |   Sensor: (%3, %4)")
+                .arg(x).arg(y).arg(originX + x).arg(originY + y), "Pixel coordinate mapping failed");
+            const auto rgba = state.image.cropRgba();
+            const auto offset = (y * 50 + x) * 4;
+            const auto raw = state.image.frame().pixels[std::size_t(originY + y) * cam86::kSensorWidth + originX + x];
+            require(pixelValues->text().startsWith(QString("R: %1   G: %2   B: %3   |")
+                .arg(rgba[offset]).arg(rgba[offset + 1]).arg(rgba[offset + 2])) &&
+                pixelValues->text().endsWith(QString("Raw: %1").arg(raw)), "Pixel RGB or raw reading incorrect");
+        };
+        inspectPixel(0, 0, (std::min(pixelView->width(), pixelView->height()) - 32) / 50);
+        pixelZoom->setCurrentIndex(1); // 8x, with an exact integer scale.
+        QApplication::processEvents();
+        inspectPixel(49, 49, 8);
+        state.image.select(0, 0);
+        window.tick();
+        inspectPixel(0, 0, 8);
+        state.image.select(1, 1);
+        window.tick();
+        inspectPixel(49, 49, 8);
+        state.image.select(0.25f, 0.25f);
+        window.tick();
+        pixelZoom->setCurrentIndex(4); // 24x must be scrollable.
+        QApplication::processEvents();
+        auto* pixelScroll = inspector->findChild<QScrollArea*>("selectionScroll");
+        require(pixelScroll->horizontalScrollBar()->maximum() > 0 && pixelScroll->verticalScrollBar()->maximum() > 0,
+            "Large pixel zoom is not scrollable");
+        pixelZoom->setCurrentIndex(0);
+        QApplication::processEvents();
+        inspectPixel(25, 25, (std::min(pixelView->width(), pixelView->height()) - 32) / 50);
+        inspector->findChild<QCheckBox*>("selectionGrid")->setChecked(false);
+        require(inspector->grab().save("qt-selection-no-grid.png"), "Pixel inspector no-grid export failed");
+        inspector->findChild<QCheckBox*>("selectionGrid")->setChecked(true);
+        require(inspector->grab().save("qt-selection-preview.png"), "Pixel inspector preview export failed");
+        QApplication::sendEvent(pixelView, &leave);
+        require(pixelValues->text().contains("R: --"), "Pixel readings did not clear on leave");
         const auto revision = state.image.revision();
         auto* iso = window.findChild<QButtonGroup*>("isoGroup");
         require(iso && iso->buttons().size() == 10 && iso->checkedId() == 9,
@@ -123,6 +193,8 @@ int main(int argc, char** argv) {
         require(state.image.revision() > revision, "ISO change did not rebuild image");
         moveToLevel(plot, 128);
         window.tick();
+        inspectPixel(25, 25, (std::min(pixelView->width(), pixelView->height()) - 32) / 50);
+        inspector->close();
         require(dialog->findChild<QLabel*>("redHistogramReading")->text().startsWith(
             QString("Count %1   ").arg(state.image.histogramR()[128])), "Histogram did not refresh tracked level after ISO change");
         dialog->close();

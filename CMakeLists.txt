@@ -61,6 +61,7 @@ add_library(cam86_ui
   src/ui/ControlPanel.cpp
   src/ui/ImagePanel.cpp
   src/ui/HistogramDialog.cpp
+  src/ui/SelectionDialog.cpp
   src/ui/LogPanel.cpp
   src/ui/MainWindow.cpp
 )
