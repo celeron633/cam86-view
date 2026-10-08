@@ -1,28 +1,20 @@
 #include "app/Application.hpp"
-
 #include <cstdio>
 #include <exception>
-
 #ifdef _WIN32
 #include <windows.h>
-
-int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
-    try {
-        cam86::Application application;
-        return application.run();
-    } catch (const std::exception& error) {
-        MessageBoxA(nullptr, error.what(), "CAM86-View", MB_OK | MB_ICONERROR);
-        return 1;
-    }
-}
-#else
-int main() {
-    try {
-        cam86::Application application;
-        return application.run();
-    } catch (const std::exception& error) {
-        std::fprintf(stderr, "CAM86-View: %s\n", error.what());
-        return 1;
-    }
-}
 #endif
+
+int main(int argc, char** argv) {
+    try {
+        cam86::Application application;
+        return application.run(argc, argv);
+    } catch (const std::exception& error) {
+#ifdef _WIN32
+        MessageBoxA(nullptr, error.what(), "CAM86-View", MB_OK | MB_ICONERROR);
+#else
+        std::fprintf(stderr, "CAM86-View: %s\n", error.what());
+#endif
+        return 1;
+    }
+}

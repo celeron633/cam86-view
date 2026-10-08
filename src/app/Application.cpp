@@ -1,48 +1,17 @@
 #include "app/Application.hpp"
-
 #include "app/AppState.hpp"
 #include "cam86/util/Config.hpp"
 #include "ui/MainWindow.hpp"
-
-#include <GLFW/glfw3.h>
-#include <imgui.h>
-#include <imgui_impl_glfw.h>
-#include <imgui_impl_opengl3.h>
-
+#include <QApplication>
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <exception>
 #include <filesystem>
-#include <stdexcept>
 #include <string>
 
 namespace cam86 {
 namespace {
-
-void glfwErrorCallback(const int error, const char* description) {
-    std::fprintf(stderr, "GLFW error %d: %s\n", error, description);
-}
-
-void applyClassicLightTheme() {
-    ImGui::StyleColorsLight();
-    auto& style = ImGui::GetStyle();
-    style.WindowPadding = ImVec2(6, 6);
-    style.FramePadding = ImVec2(5, 4);
-    style.ItemSpacing = ImVec2(6, 5);
-    style.WindowRounding = 0.0F;
-    style.ChildRounding = 0.0F;
-    style.FrameRounding = 1.0F;
-    style.ScrollbarRounding = 0.0F;
-    style.GrabRounding = 1.0F;
-    style.ChildBorderSize = 1.0F;
-    style.FrameBorderSize = 1.0F;
-    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.78F, 0.79F, 0.80F, 1.0F);
-    style.Colors[ImGuiCol_ChildBg] = ImVec4(0.82F, 0.82F, 0.82F, 1.0F);
-    style.Colors[ImGuiCol_FrameBg] = ImVec4(0.93F, 0.93F, 0.93F, 1.0F);
-    style.Colors[ImGuiCol_Border] = ImVec4(0.40F, 0.40F, 0.40F, 0.75F);
-}
-
 void loadSettings(Config& config, AppState& state) {
     config.load();
     state.simulation = config.getBool("simulation", true);
@@ -76,74 +45,23 @@ void saveSettings(Config& config, const AppState& state) {
 
 } // namespace
 
-int Application::run() {
-    glfwSetErrorCallback(glfwErrorCallback);
-    if (!glfwInit()) throw std::runtime_error("Could not initialize GLFW");
-
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-#ifdef __APPLE__
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
-#endif
-    GLFWwindow* window = glfwCreateWindow(1180, 720, "CAM86-View v0.2", nullptr, nullptr);
-    if (window == nullptr) {
-        glfwTerminate();
-        throw std::runtime_error("Could not create the OpenGL window");
-    }
-    glfwSetWindowSizeLimits(window, 960, 600, GLFW_DONT_CARE, GLFW_DONT_CARE);
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(1);
-
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    applyClassicLightTheme();
-    ImGui::GetIO().IniFilename = nullptr;
-    if (!ImGui_ImplGlfw_InitForOpenGL(window, true) || !ImGui_ImplOpenGL3_Init("#version 330")) {
-        ImGui::DestroyContext();
-        glfwDestroyWindow(window);
-        glfwTerminate();
-        throw std::runtime_error("Could not initialize the ImGui backends");
-    }
-
+int Application::run(int argc, char** argv) {
+    QApplication application(argc, argv);
+    QApplication::setApplicationName("CAM86-View");
+    QApplication::setApplicationVersion("0.2.0");
     AppState state;
     Config config(std::filesystem::current_path() / "cam86.ini");
     loadSettings(config, state);
-    state.addLog("CAM86-View v0.2 ready");
+    state.addLog("CAM86-View v0.2 ready (Qt)");
     state.addLog(state.camera.hardwareAvailable()
         ? std::string("Hardware backend: ") + hardwareBackendName()
         : "Hardware backend is not built; demo camera remains available");
-    ui::MainWindow mainWindow(state);
-
-    while (!glfwWindowShouldClose(window)) {
-        glfwPollEvents();
-        mainWindow.tick();
-
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-        mainWindow.draw();
-        ImGui::Render();
-
-        int displayWidth = 0;
-        int displayHeight = 0;
-        glfwGetFramebufferSize(window, &displayWidth, &displayHeight);
-        glViewport(0, 0, displayWidth, displayHeight);
-        glClearColor(0.18F, 0.20F, 0.22F, 1.0F);
-        glClear(GL_COLOR_BUFFER_BIT);
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        glfwSwapBuffers(window);
-    }
-
+    ui::MainWindow window(state);
+    window.show();
+    const int result = application.exec();
     state.camera.disconnect();
     try { saveSettings(config, state); }
     catch (const std::exception& error) { std::fprintf(stderr, "%s\n", error.what()); }
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-    glfwDestroyWindow(window);
-    glfwTerminate();
-    return 0;
+    return result;
 }
-
 } // namespace cam86

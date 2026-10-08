@@ -1,22 +1,22 @@
 #pragma once
-
 #include "app/AppState.hpp"
-#include "ui/Texture.hpp"
+#include <QImage>
+#include <QWidget>
 
 namespace cam86::ui {
-
-class ImagePanel {
+class ImagePanel : public QWidget {
 public:
-    void drawMain(AppState& state);
-    void drawCrop(AppState& state);
-    void drawHistogram(const AppState& state);
-
+    enum class View { Main, Crop, Histogram };
+    ImagePanel(AppState& state, View view, QWidget* parent = nullptr);
+    void refresh();
+protected:
+    void paintEvent(QPaintEvent*) override;
+    void mousePressEvent(QMouseEvent* event) override;
 private:
-    void refreshTextures(AppState& state);
-    Texture mainTexture_;
-    Texture cropTexture_;
-    std::uint64_t uploadedRevision_ = 0;
+    QRect imageRect() const;
+    AppState& state_;
+    View view_;
+    QImage image_;
+    std::uint64_t revision_ = 0;
 };
-
-} // namespace cam86::ui
-
+}

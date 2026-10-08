@@ -2,7 +2,18 @@
 
 #include "cam86/image/FitsWriter.hpp"
 
-#include <imgui.h>
+#include "ui/ControlPanel.hpp"
+#include "ui/ImagePanel.hpp"
+#include "ui/LogPanel.hpp"
+#include <QFormLayout>
+#include <QGroupBox>
+#include <QScrollArea>
+#include <QSlider>
+#include <QLabel>
+#include <QSplitter>
+#include <QStatusBar>
+#include <QTimer>
+#include <QVBoxLayout>
 
 #include <algorithm>
 #include <chrono>
@@ -15,6 +26,70 @@
 
 namespace cam86::ui {
 
+MainWindow::MainWindow(AppState& state) : state_(state) {
+    setWindowTitle("CAM86-View v0.2 - Qt");
+    resize(1180, 780);
+    setMinimumSize(960, 600);
+    auto* columns = new QSplitter(Qt::Horizontal, this);
+    setCentralWidget(columns);
+    auto* left = new QWidget;
+    auto* leftLayout = new QVBoxLayout(left);
+    mainImage_ = new ImagePanel(state, ImagePanel::View::Main);
+    mainImage_->setObjectName("mainImage");
+    leftLayout->addWidget(mainImage_, 1);
+    auto* adjustments = new QFormLayout;
+    const auto slider = [this, adjustments](const QString& text, int min, int max, int& value, auto setter) {
+        auto* row = new QWidget;
+        auto* layout = new QHBoxLayout(row);
+        layout->setContentsMargins(0,0,0,0);
+        auto* control = new QSlider(Qt::Horizontal);
+        control->setRange(min, max);
+        control->setValue(value);
+        auto* label = new QLabel(QString::number(value));
+        label->setMinimumWidth(32);
+        layout->addWidget(control, 1);
+        layout->addWidget(label);
+        connect(control, &QSlider::valueChanged, this, [this, &value, label, setter](int v) {
+            value = v; label->setNum(v); (state_.camera.*setter)(v);
+        });
+        adjustments->addRow(text, row);
+        return control;
+    };
+    gain_ = slider("Gain", 0, 63, state.gain, &CameraController::setGain);
+    offset_ = slider("Offset", -127, 127, state.offset, &CameraController::setOffset);
+    leftLayout->addLayout(adjustments);
+    columns->addWidget(left);
+    auto* middle = new QSplitter(Qt::Vertical);
+    const auto group = [middle](const QString& title, QWidget* widget) {
+        auto* box = new QGroupBox(title);
+        auto* layout = new QVBoxLayout(box);
+        layout->addWidget(widget);
+        middle->addWidget(box);
+    };
+    log_ = new LogPanel(state);
+    crop_ = new ImagePanel(state, ImagePanel::View::Crop);
+    histogram_ = new ImagePanel(state, ImagePanel::View::Histogram);
+    group("Log", log_);
+    group("Selection - 50 x 50", crop_);
+    group("RGB histogram (log scale)", histogram_);
+    middle->setSizes({270,250,160});
+    columns->addWidget(middle);
+    controls_ = new ControlPanel(state);
+    auto* scroll = new QScrollArea;
+    scroll->setWidgetResizable(true);
+    scroll->setMinimumWidth(280);
+    scroll->setWidget(controls_);
+    columns->addWidget(scroll);
+    columns->setSizes({600,260,300});
+    columns->setStretchFactor(0, 1);
+    columns->setStretchFactor(1, 0);
+    columns->setStretchFactor(2, 0);
+    auto* timer = new QTimer(this);
+    connect(timer, &QTimer::timeout, this, [this] { tick(); });
+    timer->start(50);
+    tick();
+}
+
 void MainWindow::tick() {
     for (auto& message : state_.camera.takeMessages()) state_.addLog(std::move(message));
     if (auto temperature = state_.camera.takeTemperature()) state_.sensorTemperature = *temperature;
@@ -26,6 +101,10 @@ void MainWindow::tick() {
         nextTemperatureRead_ = now + std::chrono::seconds(2);
     }
 
+    if (state_.continuous && (!state_.camera.isConnected() || state_.camera.state() == CameraState::Error)) {
+        state_.continuous = false;
+        state_.addLog("Continuous capture stopped: camera unavailable");
+    }
     const bool belowLimit = state_.infiniteFrames || state_.frameNumber < state_.continuousFrames;
     if (state_.continuous && state_.camera.isConnected() && !state_.busy() &&
         belowLimit && now >= state_.nextCapture) {
@@ -39,63 +118,13 @@ void MainWindow::tick() {
         state_.continuous = false;
         state_.addLog("Continuous capture complete");
     }
-}
-
-void MainWindow::draw() {
-    const auto* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(viewport->WorkPos);
-    ImGui::SetNextWindowSize(viewport->WorkSize);
-    constexpr auto flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-                           ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus;
-    ImGui::Begin("CAM86-View", nullptr, flags);
-    drawAcquisitionArea();
-    ImGui::End();
-}
-
-void MainWindow::drawAcquisitionArea() {
-    const auto available = ImGui::GetContentRegionAvail();
-    const float spacing = ImGui::GetStyle().ItemSpacing.x;
-    const float controlsWidth = std::clamp(available.x * 0.225F, 250.0F, 310.0F);
-    const float centerWidth = std::clamp(available.x * 0.205F, 210.0F, 300.0F);
-    const float leftWidth = std::max(300.0F, available.x - controlsWidth - centerWidth - spacing * 2.0F);
-
-    ImGui::BeginChild("left-column", ImVec2(leftWidth, 0), ImGuiChildFlags_Borders);
-    constexpr float sliderArea = 105.0F;
-    ImGui::BeginChild("image", ImVec2(0, -sliderArea), ImGuiChildFlags_Borders);
-    imagePanel_.drawMain(state_);
-    ImGui::EndChild();
-    ImGui::Text("Gain %d", state_.gain);
-    ImGui::SameLine(68);
-    ImGui::BeginDisabled(!state_.camera.isConnected());
-    ImGui::SetNextItemWidth(-1);
-    if (ImGui::SliderInt("##gain", &state_.gain, 0, 63)) state_.camera.setGain(state_.gain);
-    ImGui::Text("Offset %d", state_.offset);
-    ImGui::SameLine(68);
-    ImGui::SetNextItemWidth(-1);
-    if (ImGui::SliderInt("##offset", &state_.offset, -127, 127)) state_.camera.setOffset(state_.offset);
-    ImGui::EndDisabled();
-    ImGui::EndChild();
-
-    ImGui::SameLine();
-    ImGui::BeginChild("center-column", ImVec2(centerWidth, 0));
-    const float centerHeight = ImGui::GetContentRegionAvail().y;
-    ImGui::BeginChild("log", ImVec2(0, centerHeight * 0.38F), ImGuiChildFlags_Borders,
-                      ImGuiWindowFlags_HorizontalScrollbar);
-    logPanel_.draw(state_);
-    ImGui::EndChild();
-    ImGui::BeginChild("crop", ImVec2(0, centerHeight * 0.39F), ImGuiChildFlags_Borders);
-    imagePanel_.drawCrop(state_);
-    ImGui::EndChild();
-    ImGui::BeginChild("histogram", ImVec2(0, 0), ImGuiChildFlags_Borders);
-    imagePanel_.drawHistogram(state_);
-    ImGui::EndChild();
-    ImGui::EndChild();
-
-    ImGui::SameLine();
-    ImGui::BeginChild("control-column", ImVec2(controlsWidth, 0), ImGuiChildFlags_Borders,
-                      ImGuiWindowFlags_AlwaysVerticalScrollbar);
-    controlPanel_.draw(state_);
-    ImGui::EndChild();
+    controls_->refresh();
+    gain_->setEnabled(state_.camera.isConnected());
+    offset_->setEnabled(state_.camera.isConnected());
+    mainImage_->refresh(); crop_->refresh(); histogram_->refresh(); log_->refresh();
+    statusBar()->showMessage(QString("%1 | Frames: %2 | Sensor: %3 C")
+        .arg(state_.camera.isConnected() ? (state_.busy() ? "Capturing" : "Ready") : "Disconnected")
+        .arg(state_.frameNumber).arg(state_.sensorTemperature, 0, 'f', 1));
 }
 
 void MainWindow::processCompletedFrame(Frame frame) {
@@ -104,10 +133,14 @@ void MainWindow::processCompletedFrame(Frame frame) {
         state_.image.accept(std::move(frame), state_.darkMode);
         state_.image.rebuild(state_.bin2x2, state_.isoShift());
         if (state_.writeFits) {
-            const auto path = std::filesystem::path(
-                std::string(state_.fileName.data()) + std::to_string(state_.frameNumber) + ".fit");
+            const auto filename = QString::fromUtf8(state_.fileName.data()) + QString::number(state_.frameNumber) + ".fit";
+#ifdef _WIN32
+            const auto path = std::filesystem::path(filename.toStdWString());
+#else
+            const auto path = std::filesystem::path(filename.toStdString());
+#endif
             writeFits(path, state_.image.frame(), state_.image.blackLevel(), state_.image.whiteLevel());
-            state_.addLog("File " + path.string() + " is recorded");
+            state_.addLog("File " + filename.toStdString() + " is recorded");
         }
         if (state_.information) appendStatistics();
         ++state_.frameNumber;

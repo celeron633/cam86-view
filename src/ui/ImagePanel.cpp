@@ -1,91 +1,70 @@
 #include "ui/ImagePanel.hpp"
-
-#include <imgui.h>
-
+#include <QMouseEvent>
+#include <QPainter>
+#include <QPainterPath>
 #include <algorithm>
-#include <array>
 #include <cmath>
-#include <vector>
 
 namespace cam86::ui {
-
-void ImagePanel::refreshTextures(AppState& state) {
-    if (!state.image.hasImage() || uploadedRevision_ == state.image.revision()) return;
-    mainTexture_.upload(state.image.previewWidth(), state.image.previewHeight(), state.image.previewRgba());
-    cropTexture_.upload(50, 50, state.image.cropRgba());
-    uploadedRevision_ = state.image.revision();
+ImagePanel::ImagePanel(AppState& state, View view, QWidget* parent)
+    : QWidget(parent), state_(state), view_(view) {
+    setMinimumSize(view == View::Main ? QSize(300, 200) : QSize(160, 100));
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 }
-
-void ImagePanel::drawMain(AppState& state) {
-    refreshTextures(state);
-    const auto available = ImGui::GetContentRegionAvail();
-    const auto width = std::max(1.0F, available.x);
-    const auto height = std::max(1.0F, std::min(available.y, width * 2.0F / 3.0F));
-    if (!mainTexture_.valid()) {
-        const auto position = ImGui::GetCursorScreenPos();
-        ImGui::InvisibleButton("main-image-empty", ImVec2(width, height));
-        ImGui::GetWindowDrawList()->AddRectFilled(position, ImVec2(position.x + width, position.y + height),
-                                                   IM_COL32(28, 31, 35, 255));
-        ImGui::GetWindowDrawList()->AddText(ImVec2(position.x + 14, position.y + 12), IM_COL32(150, 155, 160, 255),
-                                            "3000 x 2000 image");
-        return;
+void ImagePanel::refresh() {
+    if (revision_ == state_.image.revision()) return;
+    revision_ = state_.image.revision();
+    if (state_.image.hasImage() && view_ != View::Histogram) {
+        const bool crop = view_ == View::Crop;
+        const auto rgba = crop ? state_.image.cropRgba() : state_.image.previewRgba();
+        const int w = crop ? 50 : state_.image.previewWidth();
+        const int h = crop ? 50 : state_.image.previewHeight();
+        image_ = QImage(rgba.data(), w, h, w * 4, QImage::Format_RGBA8888).copy();
     }
-    ImGui::ImageButton("main-image", mainTexture_.imguiId(), ImVec2(width, height),
-                       ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 1), ImVec4(1, 1, 1, 1));
-    if (ImGui::IsItemClicked()) {
-        const auto min = ImGui::GetItemRectMin();
-        const auto mouse = ImGui::GetMousePos();
-        state.image.select((mouse.x - min.x) / width, (mouse.y - min.y) / height);
-    }
+    update();
 }
-
-void ImagePanel::drawCrop(AppState& state) {
-    refreshTextures(state);
-    const auto available = ImGui::GetContentRegionAvail();
-    const auto side = std::max(1.0F, std::min(available.x, available.y));
-    if (cropTexture_.valid()) {
-        ImGui::Image(cropTexture_.imguiId(), ImVec2(side, side));
-    } else {
-        const auto position = ImGui::GetCursorScreenPos();
-        ImGui::Dummy(ImVec2(side, side));
-        ImGui::GetWindowDrawList()->AddRectFilled(position, ImVec2(position.x + side, position.y + side),
-                                                   IM_COL32(28, 31, 35, 255));
-    }
+QRect ImagePanel::imageRect() const {
+    const QSize source = image_.isNull() ? QSize(3000, 2000) : image_.size();
+    const QSize size = source.scaled(this->size(), Qt::KeepAspectRatio);
+    return QRect(QPoint((width() - size.width()) / 2, (height() - size.height()) / 2), size);
 }
-
-void ImagePanel::drawHistogram(const AppState& state) {
-    std::array<float, 256> red{};
-    std::array<float, 256> green{};
-    std::array<float, 256> blue{};
-    const auto& hr = state.image.histogramR();
-    const auto& hg = state.image.histogramG();
-    const auto& hb = state.image.histogramB();
-    float maximum = 1.0F;
-    for (std::size_t i = 0; i < red.size(); ++i) {
-        red[i] = std::log1p(static_cast<float>(hr[i]));
-        green[i] = std::log1p(static_cast<float>(hg[i]));
-        blue[i] = std::log1p(static_cast<float>(hb[i]));
-        maximum = std::max({maximum, red[i], green[i], blue[i]});
-    }
-
-    const auto origin = ImGui::GetCursorScreenPos();
-    const auto size = ImGui::GetContentRegionAvail();
-    ImGui::InvisibleButton("histogram", ImVec2(size.x, std::max(60.0F, size.y)));
-    auto* draw = ImGui::GetWindowDrawList();
-    const auto end = ImGui::GetItemRectMax();
-    draw->AddRectFilled(origin, end, IM_COL32(20, 22, 25, 255));
-    const auto plot = [&](const std::array<float, 256>& values, const ImU32 color) {
-        for (std::size_t i = 1; i < values.size(); ++i) {
-            const auto x0 = origin.x + (static_cast<float>(i - 1) / 255.0F) * size.x;
-            const auto x1 = origin.x + (static_cast<float>(i) / 255.0F) * size.x;
-            const auto y0 = end.y - values[i - 1] / maximum * (end.y - origin.y - 3.0F);
-            const auto y1 = end.y - values[i] / maximum * (end.y - origin.y - 3.0F);
-            draw->AddLine(ImVec2(x0, y0), ImVec2(x1, y1), color, 1.0F);
+void ImagePanel::paintEvent(QPaintEvent*) {
+    QPainter painter(this);
+    painter.fillRect(rect(), QColor(28, 31, 35));
+    if (view_ == View::Histogram) {
+        const auto& processor = state_.image;
+        const std::array<const std::array<std::uint32_t, 256>*, 3> channels{
+            &processor.histogramR(), &processor.histogramG(), &processor.histogramB()};
+        const std::array<QColor, 3> colors{QColor(230,75,70), QColor(70,220,100), QColor(80,130,240)};
+        double maximum = 1.0;
+        for (const auto* channel : channels)
+            for (auto count : *channel) maximum = std::max(maximum, std::log1p(double(count)));
+        for (std::size_t c = 0; c < channels.size(); ++c) {
+            QPainterPath path;
+            for (int i = 0; i < 256; ++i) {
+                QPointF point(i * (width() - 1) / 255.0,
+                    height() - 1 - std::log1p(double((*channels[c])[i])) / maximum * (height() - 4));
+                if (i == 0) path.moveTo(point); else path.lineTo(point);
+            }
+            painter.setPen(colors[c]);
+            painter.drawPath(path);
         }
-    };
-    plot(red, IM_COL32(230, 75, 70, 220));
-    plot(green, IM_COL32(70, 220, 100, 220));
-    plot(blue, IM_COL32(80, 130, 240, 220));
+    } else if (!image_.isNull()) {
+        painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
+        painter.drawImage(imageRect(), image_);
+    } else {
+        painter.setPen(QColor(160, 165, 170));
+        painter.drawText(rect().adjusted(12,12,-12,-12), Qt::AlignCenter,
+            view_ == View::Main ? "3000 x 2000 - No image" : "50 x 50 crop");
+    }
 }
-
-} // namespace cam86::ui
+void ImagePanel::mousePressEvent(QMouseEvent* event) {
+    const auto target = imageRect();
+    if (view_ == View::Main && state_.image.hasImage() && event->button() == Qt::LeftButton &&
+        target.contains(event->position().toPoint())) {
+        state_.image.select(float((event->position().x() - target.x()) / target.width()),
+                            float((event->position().y() - target.y()) / target.height()));
+        refresh();
+    }
+}
+}

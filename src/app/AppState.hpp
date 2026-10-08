@@ -57,7 +57,7 @@ struct AppState {
     std::array<char, 256> fileName{};
     std::chrono::steady_clock::time_point nextCapture = std::chrono::steady_clock::now();
 
-    AppState() { std::strcpy(fileName.data(), "FileName"); }
+    AppState() { std::copy_n("FileName", 9, fileName.data()); }
 
     [[nodiscard]] double exposureSeconds() const {
         return kExposureChoices[static_cast<std::size_t>(std::clamp(

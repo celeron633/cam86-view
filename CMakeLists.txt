@@ -10,44 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-include(FetchContent)
-
-set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(
-  glfw
-  GIT_REPOSITORY https://github.com/glfw/glfw.git
-  GIT_TAG 3.4
-  GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(glfw)
-
-FetchContent_Declare(
-  imgui
-  GIT_REPOSITORY https://github.com/ocornut/imgui.git
-  GIT_TAG v1.91.9b
-  GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(imgui)
-
-find_package(OpenGL REQUIRED)
-
-add_library(imgui STATIC
-  ${imgui_SOURCE_DIR}/imgui.cpp
-  ${imgui_SOURCE_DIR}/imgui_demo.cpp
-  ${imgui_SOURCE_DIR}/imgui_draw.cpp
-  ${imgui_SOURCE_DIR}/imgui_tables.cpp
-  ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-  ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
-  ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
-)
-target_include_directories(imgui PUBLIC
-  ${imgui_SOURCE_DIR}
-  ${imgui_SOURCE_DIR}/backends
-)
-target_link_libraries(imgui PUBLIC glfw OpenGL::GL)
+find_package(Qt6 6.2 REQUIRED COMPONENTS Widgets)
 
 set(CAM86_HAS_LIBUSB OFF)
 if(CAM86_ENABLE_LIBUSB)
@@ -93,21 +56,41 @@ else()
   target_compile_options(cam86_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-add_executable(cam86-view
-  src/main.cpp
-  src/app/Application.cpp
+add_library(cam86_ui
   src/ui/ControlPanel.cpp
-  src/ui/FileDialog.cpp
   src/ui/ImagePanel.cpp
   src/ui/LogPanel.cpp
   src/ui/MainWindow.cpp
-  src/ui/Texture.cpp
 )
-target_include_directories(cam86-view PRIVATE include src)
-target_link_libraries(cam86-view PRIVATE cam86_core imgui)
+target_include_directories(cam86_ui PUBLIC include src)
+target_link_libraries(cam86_ui PUBLIC cam86_core Qt6::Widgets)
+
+add_executable(cam86-view src/main.cpp src/app/Application.cpp)
+target_link_libraries(cam86-view PRIVATE cam86_ui)
+if(MSVC)
+  target_compile_options(cam86_ui PRIVATE /W4 /permissive- /utf-8)
+  target_compile_options(cam86-view PRIVATE /utf-8)
+endif()
 if(WIN32)
   set_target_properties(cam86-view PROPERTIES WIN32_EXECUTABLE TRUE)
   target_compile_definitions(cam86-view PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  if(MSVC)
+    set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
+    include(InstallRequiredSystemLibraries)
+    if(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
+      add_custom_command(TARGET cam86-view POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}
+                "$<TARGET_FILE_DIR:cam86-view>"
+        COMMENT "Deploying Microsoft C++ runtime" COMMAND_EXPAND_LISTS VERBATIM)
+    endif()
+  endif()
+  get_target_property(CAM86_QMAKE_EXECUTABLE Qt6::qmake IMPORTED_LOCATION)
+  get_filename_component(CAM86_QT_BIN_DIR "${CAM86_QMAKE_EXECUTABLE}" DIRECTORY)
+  find_program(CAM86_WINDEPLOYQT windeployqt HINTS "${CAM86_QT_BIN_DIR}" REQUIRED)
+  add_custom_command(TARGET cam86-view POST_BUILD
+    COMMAND "${CAM86_WINDEPLOYQT}" --no-translations --no-opengl-sw --no-system-d3d-compiler --no-compiler-runtime
+            "$<TARGET_FILE:cam86-view>"
+    COMMENT "Deploying Qt runtime" VERBATIM)
 endif()
 
 if(CAM86_BUILD_TESTS)
@@ -115,6 +98,18 @@ if(CAM86_BUILD_TESTS)
   add_executable(cam86-tests tests/CoreTests.cpp)
   target_link_libraries(cam86-tests PRIVATE cam86_core)
   add_test(NAME cam86-core-tests COMMAND cam86-tests)
+  add_executable(cam86-ui-tests tests/UiTests.cpp)
+  target_link_libraries(cam86-ui-tests PRIVATE cam86_ui)
+  if(WIN32)
+    add_test(NAME cam86-qt-ui-tests COMMAND cam86-ui-tests -platform windows)
+  else()
+    add_test(NAME cam86-qt-ui-tests COMMAND cam86-ui-tests -platform offscreen)
+  endif()
+  set_tests_properties(cam86-qt-ui-tests PROPERTIES TIMEOUT 60)
+  if(WIN32)
+    set_tests_properties(cam86-qt-ui-tests PROPERTIES
+      ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${CAM86_QT_BIN_DIR}")
+  endif()
 endif()
 
 message(STATUS "CAM86 libusb backend: ${CAM86_HAS_LIBUSB}")

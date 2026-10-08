@@ -23,13 +23,20 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: win64_msvc2022_64
+          cache: true
+
       - name: Configure Release
         run: >-
           cmake -S . -B build/windows -G "Visual Studio 17 2022" -A x64
           -DCAM86_ENABLE_LIBUSB=OFF
           -DCAM86_BUILD_TESTS=ON
           -DBUILD_SHARED_LIBS=OFF
-          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL
 
       - name: Build Release
         run: cmake --build build/windows --config Release --parallel

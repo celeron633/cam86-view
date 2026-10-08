@@ -1,18 +1,27 @@
 #pragma once
-
 #include "app/AppState.hpp"
-#include "ui/FileDialog.hpp"
-
+#include <QWidget>
+class QComboBox;
+class QPushButton;
+class QProgressBar;
+class QLabel;
+class QSpinBox;
 namespace cam86::ui {
-
-class ControlPanel {
+class ControlPanel : public QWidget {
 public:
-    void draw(AppState& state);
-
+    explicit ControlPanel(AppState& state, QWidget* parent = nullptr);
+    void refresh();
 private:
-    static void startOne(AppState& state);
-    static void writeCurrentFits(AppState& state);
-    FileDialog darkFileDialog_;
+    void startOne();
+    void writeCurrentFits();
+    AppState& state_;
+    QComboBox* backend_;
+    QPushButton* connection_;
+    QPushButton* capture_;
+    QPushButton* stop_;
+    QPushButton* continuous_;
+    QProgressBar* progress_;
+    QLabel* temperature_;
+    QSpinBox* frames_;
 };
-
-} // namespace cam86::ui
+}

@@ -1,0 +1,10 @@
+CAM86-View uses unmodified, dynamically linked Qt 6 libraries.
+Copyright (C) The Qt Company Ltd. and other contributors.
+
+Qt Core, Gui and Widgets are used under the GNU Lesser General Public License
+version 3. The license texts are included in this directory.
+Qt licensing and third-party notices: https://doc.qt.io/qt-6/licenses-used-in-qt.html
+Corresponding Qt 6.8.3 source: https://download.qt.io/archive/qt/6.8/6.8.3/
+
+Qt libraries may be replaced with compatible builds. This application's license
+does not restrict reverse engineering for debugging modifications to Qt.

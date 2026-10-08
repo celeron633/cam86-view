@@ -1,19 +1,13 @@
 #pragma once
-
 #include "app/AppState.hpp"
-
-#include <cstddef>
-
+#include <QPlainTextEdit>
 namespace cam86::ui {
-
-class LogPanel {
+class LogPanel : public QPlainTextEdit {
 public:
-    void draw(AppState& state);
-
+    explicit LogPanel(AppState& state, QWidget* parent = nullptr);
+    void refresh();
 private:
-    bool scrollToBottom_ = false;
-    std::size_t lastSize_ = 0;
+    AppState& state_;
+    std::vector<std::string> displayed_;
 };
-
-} // namespace cam86::ui
-
+}

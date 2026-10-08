@@ -1,29 +1,26 @@
 #pragma once
-
 #include "app/AppState.hpp"
-#include "ui/ControlPanel.hpp"
-#include "ui/ImagePanel.hpp"
-#include "ui/LogPanel.hpp"
-
+#include <QMainWindow>
+class QSlider;
 namespace cam86::ui {
-
-class MainWindow {
+class ImagePanel;
+class ControlPanel;
+class LogPanel;
+class MainWindow : public QMainWindow {
 public:
-    explicit MainWindow(AppState& state) : state_(state) {}
+    explicit MainWindow(AppState& state);
     void tick();
-    void draw();
-
 private:
-    void drawAcquisitionArea();
     void processCompletedFrame(Frame frame);
     void appendStatistics();
-
     AppState& state_;
-    ImagePanel imagePanel_;
-    ControlPanel controlPanel_;
-    LogPanel logPanel_;
+    ImagePanel* mainImage_;
+    ImagePanel* crop_;
+    ImagePanel* histogram_;
+    ControlPanel* controls_;
+    LogPanel* log_;
+    QSlider* gain_;
+    QSlider* offset_;
     std::chrono::steady_clock::time_point nextTemperatureRead_ = std::chrono::steady_clock::now();
 };
-
-} // namespace cam86::ui
-
+}

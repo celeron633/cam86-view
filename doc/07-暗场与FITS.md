@@ -65,7 +65,7 @@ offset  size                         content
 ## 5. 暗场文件操作
 
 - `Save dark`：以 Output prefix 为路径，缺少 `.drk` 时自动追加；
-- `Load dark...`：打开 ImGui 文件选择器，筛选 `.drk`；
+- `Load dark...`：打开 Qt 文件选择器，筛选 `.drk`；
 - `View dark`：把平均暗场复制到当前 16 位 Frame，然后重建预览；
 - 加载失败、文件截断或帧数无效时向日志写入异常。
 

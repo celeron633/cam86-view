@@ -2,7 +2,7 @@
 
 详细设计、通信、图像采集与处理文档见 [`doc/README.md`](doc/README.md)。
 
-这是对 `cam86-view-old` Delphi 7 工程的现代 C++20 重构。界面使用 Dear ImGui，构建使用 CMake；Windows 和 Linux 共用同一套相机、图像处理和 UI 代码。
+这是对 `cam86-view-old` Delphi 7 工程的现代 C++20 重构。界面使用 Qt 6 Widgets，构建使用 CMake；Windows 和 Linux 共用同一套相机、图像处理和 UI 代码。
 
 当前实现保留了旧软件的主要布局和功能：
 
@@ -23,14 +23,14 @@ src/
   app/          程序生命周期与状态
   camera/       真机和模拟相机
   image/        图像处理实现
-  ui/           主窗口、图像、日志、控制面板、OpenGL 纹理
+  ui/           主窗口、图像、日志、控制面板、Qt 图像控件
   usb/          libusb FT2232H 后端
 tests/          FTDI 状态头、SPI 波形、帧解码测试
 ```
 
 ## 构建
 
-首次配置会通过 CMake FetchContent 下载 GLFW 3.4 和 Dear ImGui 1.91.9b。
+构建需要 Qt 6.2 或更新版本的 Widgets 模块。通过 `CMAKE_PREFIX_PATH` 指向与编译器匹配的 Qt 安装目录。
 
 ### Windows（推荐 vcpkg）
 
@@ -39,6 +39,7 @@ tests/          FTDI 状态头、SPI 波形、帧解码测试
 ```powershell
 $vcpkgRoot = 'C:\path\to\vcpkg'
 cmake -S . -B build/windows -A x64 `
+  -DCMAKE_PREFIX_PATH="C:/Qt/6.8.3/msvc2022_64" `
   -DCMAKE_TOOLCHAIN_FILE="$vcpkgRoot\scripts\buildsystems\vcpkg.cmake"
 cmake --build build/windows --config Release --parallel
 ctest --test-dir build/windows -C Release --output-on-failure
@@ -46,11 +47,23 @@ ctest --test-dir build/windows -C Release --output-on-failure
 
 程序位于 `build/windows/Release/cam86-view.exe`。Windows 真机默认使用 D2XX，可加 `-DCAM86_ENABLE_LIBUSB=OFF` 构建，不需要 vcpkg；Linux 真机使用 libusb。
 
+不使用 vcpkg 时，本机可直接构建和运行：
+
+```powershell
+cmake -S . -B build/windows -G "Visual Studio 17 2022" -A x64 `
+  -DCMAKE_PREFIX_PATH="C:/Qt/6.8.3/msvc2022_64" -DCAM86_ENABLE_LIBUSB=OFF
+cmake --build build/windows --config Release --parallel
+ctest --test-dir build/windows -C Release --output-on-failure
+./build/windows/Release/cam86-view.exe
+```
+
+Windows 构建完成后自动运行 `windeployqt`，可直接启动 EXE；发布 ZIP 也包含 Qt 运行时。未附带 Microsoft C++ 运行库时需要安装 x64 Visual C++ Redistributable。
+
 ### Linux（Debian/Ubuntu）
 
 ```bash
 sudo apt install build-essential cmake ninja-build libusb-1.0-0-dev \
-  libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+  qt6-base-dev
 cmake --preset release
 cmake --build --preset release
 ctest --test-dir build/release --output-on-failure
@@ -109,13 +122,13 @@ SUBSYSTEM=="usb", ATTR{idVendor}=="0403", ATTR{idProduct}=="6010", ATTR{serial}=
 - `Timer1`：曝光进度，现由相机工作线程的 progress callback 驱动；
 - `Timer2`：检查相机状态并触发下一帧，现由每帧 UI tick 和 `CameraState` 驱动；
 - `Timer3`：连拍间隔计时，现由 `std::chrono::steady_clock` 驱动；
-- `OpenDialog1`：旧版只用于加载 `.drk`，现由右侧 `Load dark...` 打开跨平台 ImGui 文件选择器。
+- `OpenDialog1`：旧版只用于加载 `.drk`，现由右侧 `Load dark...` 打开Qt 系统文件对话框。
 
 ## 自动构建 Release ZIP
 
 GitHub Actions 的 `Windows Release` 工作流会在 push、pull request 和手动触发时构建 Windows x64 Release，运行核心测试，并上传 `cam86-view-windows-x64-<commit>.zip`。在仓库 Actions 页面打开成功的运行，从 Artifacts 下载 ZIP（保留 30 天）。
 
-ZIP 包含 EXE、运行说明及许可证。构建静态链接 Microsoft C++ 运行库；真机仍需安装 FTDI D2XX 驱动，程序使用系统的 64 位 DLL。
+ZIP 包含 EXE、运行说明及许可证。包内附带 Qt DLL、平台插件；真机仍需安装 FTDI D2XX 驱动，程序使用系统的 64 位 DLL。
 
 本地已完成 Release 构建时，也可打包：
 
