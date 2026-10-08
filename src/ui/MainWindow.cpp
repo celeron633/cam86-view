@@ -34,7 +34,7 @@ static void initializeThemeResources() {
 namespace cam86::ui {
 
 MainWindow::MainWindow(AppState& state) : state_(state) {
-    setWindowTitle("CAM86-View v0.2");
+    setWindowTitle(QString("CAM86-View v%1").arg(CAM86_VERSION));
     initializeThemeResources();
     QFile stylesheet(":/ui/theme.qss");
     if (!stylesheet.open(QIODevice::ReadOnly)) throw std::runtime_error("Could not load the interface theme");

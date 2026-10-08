@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(cam86_view VERSION 0.2.0 LANGUAGES C CXX)
+project(cam86_view VERSION 0.3.0 LANGUAGES C CXX)
 
 option(CAM86_ENABLE_LIBUSB "Build the real CAM86/libusb backend when libusb is available" ON)
 option(CAM86_BUILD_TESTS "Build protocol and image-processing tests" ON)
@@ -68,6 +68,7 @@ add_library(cam86_ui
 set_target_properties(cam86_ui PROPERTIES AUTORCC ON)
 target_include_directories(cam86_ui PUBLIC include src)
 target_link_libraries(cam86_ui PUBLIC cam86_core Qt6::Widgets)
+target_compile_definitions(cam86_ui PRIVATE CAM86_VERSION="${PROJECT_VERSION}")
 
 add_executable(cam86-view src/main.cpp src/app/Application.cpp)
 target_link_libraries(cam86-view PRIVATE cam86_ui)

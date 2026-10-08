@@ -126,14 +126,16 @@ SUBSYSTEM=="usb", ATTR{idVendor}=="0403", ATTR{idProduct}=="6010", ATTR{serial}=
 
 ## 自动构建 Release ZIP
 
-GitHub Actions 的 `Windows Release` 工作流会在 push、pull request 和手动触发时构建 Windows x64 Release，运行核心测试，并上传 `cam86-view-windows-x64-<commit>.zip`。在仓库 Actions 页面打开成功的运行，从 Artifacts 下载 ZIP（保留 30 天）。
+GitHub Actions 的 `Windows Release` 工作流会在分支 push、pull request 和手动触发时构建 Windows x64 Release，运行核心及 UI 测试，并上传 `cam86-view-windows-x64-<commit>.zip`。在仓库 Actions 页面打开成功的运行，从 Artifacts 下载 ZIP（保留 30 天）。
+
+推送版本 tag（例如 `v0.3`）会自动构建、测试，成功后创建对应 GitHub Release，附带自动生成的发布说明和 `cam86-view-windows-x64-0.3.zip`。重新运行同一 tag 的工作流会更新已有 Release 的 ZIP。发布步骤使用 GitHub 提供的 `GITHUB_TOKEN`，无需额外配置 secret。
 
 ZIP 包含 EXE、运行说明及许可证。包内附带 Qt DLL、平台插件；真机仍需安装 FTDI D2XX 驱动，程序使用系统的 64 位 DLL。
 
 本地已完成 Release 构建时，也可打包：
 
 ```powershell
-.github/scripts/package-windows.ps1 -Version 0.2.0
+.github/scripts/package-windows.ps1 -Version 0.3
 ```
 
 生成的 ZIP 位于 `dist/`。

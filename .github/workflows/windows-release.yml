@@ -2,6 +2,8 @@ name: Windows Release
 
 on:
   push:
+    branches: ['**']
+    tags: ['v[0-9]*']
   pull_request:
   workflow_dispatch:
 
@@ -13,6 +15,8 @@ jobs:
     name: Build and package Windows x64
     runs-on: windows-2022
     timeout-minutes: 20
+    outputs:
+      package-name: ${{ steps.package.outputs.name }}
     defaults:
       run:
         shell: pwsh
@@ -41,15 +45,19 @@ jobs:
       - name: Build Release
         run: cmake --build build/windows --config Release --parallel
 
-      - name: Run core tests
+      - name: Run core and UI tests
         run: ctest --test-dir build/windows -C Release --output-on-failure --no-tests=error
 
       - name: Package ZIP
         id: package
         run: |
           $version = $env:GITHUB_SHA.Substring(0, 7)
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          }
           $package = & .github/scripts/package-windows.ps1 -Version $version
           "path=$($package.FullName)" >> $env:GITHUB_OUTPUT
+          "name=$($package.Name)" >> $env:GITHUB_OUTPUT
 
       - name: Upload ZIP
         uses: actions/upload-artifact@v7
@@ -58,3 +66,43 @@ jobs:
           archive: false
           if-no-files-found: error
           retention-days: 30
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: windows-2022
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - name: Download release ZIP
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.package-name }}
+          path: release-assets
+          skip-decompress: true
+
+      - name: Publish release and attach ZIP
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          PACKAGE_NAME: ${{ needs.build.outputs.package-name }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $asset = Join-Path 'release-assets' $env:PACKAGE_NAME
+          if (-not (Test-Path -LiteralPath $asset -PathType Leaf)) {
+            throw "Release ZIP missing: $asset"
+          }
+          gh release view $env:RELEASE_TAG *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:RELEASE_TAG $asset --clobber
+          } else {
+            gh release create $env:RELEASE_TAG $asset --verify-tag --generate-notes --title "CAM86-View $env:RELEASE_TAG"
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publication failed' }
