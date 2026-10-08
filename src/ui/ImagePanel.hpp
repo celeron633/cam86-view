@@ -1,9 +1,11 @@
 #pragma once
 #include "app/AppState.hpp"
 #include <QImage>
+#include <QPointer>
 #include <QWidget>
 
 namespace cam86::ui {
+class HistogramDialog;
 class ImagePanel : public QWidget {
 public:
     enum class View { Main, Crop, Histogram };
@@ -18,5 +20,6 @@ private:
     View view_;
     QImage image_;
     std::uint64_t revision_ = 0;
+    QPointer<HistogramDialog> histogramDialog_;
 };
 }

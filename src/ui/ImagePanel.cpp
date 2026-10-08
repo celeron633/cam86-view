@@ -1,4 +1,5 @@
 #include "ui/ImagePanel.hpp"
+#include "ui/HistogramDialog.hpp"
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -10,8 +11,13 @@ ImagePanel::ImagePanel(AppState& state, View view, QWidget* parent)
     : QWidget(parent), state_(state), view_(view) {
     setMinimumSize(view == View::Main ? QSize(300, 200) : QSize(160, 100));
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    if (view == View::Histogram) {
+        setCursor(Qt::PointingHandCursor);
+        setToolTip("Click to open detailed RGB histogram with mouse tracking");
+    }
 }
 void ImagePanel::refresh() {
+    if (histogramDialog_ && histogramDialog_->isVisible()) histogramDialog_->refresh();
     if (revision_ == state_.image.revision()) return;
     revision_ = state_.image.revision();
     if (state_.image.hasImage() && view_ != View::Histogram) {
@@ -61,6 +67,15 @@ void ImagePanel::paintEvent(QPaintEvent*) {
     }
 }
 void ImagePanel::mousePressEvent(QMouseEvent* event) {
+    if (view_ == View::Histogram && event->button() == Qt::LeftButton) {
+        if (!histogramDialog_) histogramDialog_ = new HistogramDialog(state_, this);
+        histogramDialog_->refresh();
+        histogramDialog_->show();
+        histogramDialog_->raise();
+        histogramDialog_->activateWindow();
+        event->accept();
+        return;
+    }
     const auto target = imageRect();
     if (view_ == View::Main && state_.image.hasImage() && event->button() == Qt::LeftButton &&
         target.contains(event->position().toPoint())) {

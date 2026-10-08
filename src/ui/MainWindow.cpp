@@ -92,9 +92,10 @@ MainWindow::MainWindow(AppState& state) : state_(state) {
     log_ = new LogPanel(state);
     crop_ = new ImagePanel(state, ImagePanel::View::Crop);
     histogram_ = new ImagePanel(state, ImagePanel::View::Histogram);
+    histogram_->setObjectName("histogramPreview");
     group("Log", log_);
     group("Selection - 50 x 50", crop_);
-    group("RGB histogram (log scale)", histogram_);
+    group("RGB histogram (click to expand)", histogram_);
     middle->setSizes({255,260,150});
     columns->addWidget(middle);
     controls_ = new ControlPanel(state);

@@ -60,6 +60,7 @@ add_library(cam86_ui
   src/ui/theme.qrc
   src/ui/ControlPanel.cpp
   src/ui/ImagePanel.cpp
+  src/ui/HistogramDialog.cpp
   src/ui/LogPanel.cpp
   src/ui/MainWindow.cpp
 )
