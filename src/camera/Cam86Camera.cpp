@@ -161,15 +161,19 @@ public:
     ~Cam86Camera() override { disconnect(); }
 
     [[nodiscard]] CameraInfo info() const override {
-        return {"CAM86", "libusb / FT2232H", false};
+        return {"CAM86", hardwareBackendName(), false};
     }
 
     void connect() override {
         std::scoped_lock lock(ioMutex_);
         if (connected_) return;
+#ifdef _WIN32
+        transport_ = makeD2xxFtdiTransport();
+#else
         transport_ = makeLibusbFtdiTransport();
-        transport_->open(0x0403, 0x6010, "CAM86");
+#endif
         try {
+            transport_->open(0x0403, 0x6010, "CAM86");
             transport_->setBitMode(FtdiChannel::B, 0xBF, 0x04);
             transport_->setBaudRate(FtdiChannel::B, 20'000);
             transport_->setLatency(FtdiChannel::A, 1);
@@ -344,6 +348,22 @@ bool libusbBackendAvailable() noexcept {
     return true;
 #else
     return false;
+#endif
+}
+
+bool hardwareBackendAvailable() noexcept {
+#ifdef _WIN32
+    return true;
+#else
+    return libusbBackendAvailable();
+#endif
+}
+
+const char* hardwareBackendName() noexcept {
+#ifdef _WIN32
+    return "D2XX / FT2232H";
+#else
+    return "libusb / FT2232H";
 #endif
 }
 

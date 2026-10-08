@@ -35,6 +35,7 @@ public:
 std::unique_ptr<ICamera> makeSimulatedCamera();
 std::unique_ptr<ICamera> makeCam86Camera();
 [[nodiscard]] bool libusbBackendAvailable() noexcept;
+[[nodiscard]] bool hardwareBackendAvailable() noexcept;
+[[nodiscard]] const char* hardwareBackendName() noexcept;
 
 } // namespace cam86
-

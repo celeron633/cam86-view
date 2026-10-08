@@ -16,7 +16,7 @@ void CameraController::useSimulation(const bool enabled) {
     replaceCamera();
 }
 
-bool CameraController::hardwareAvailable() const noexcept { return libusbBackendAvailable(); }
+bool CameraController::hardwareAvailable() const noexcept { return hardwareBackendAvailable(); }
 
 bool CameraController::connect() {
     joinWorker();

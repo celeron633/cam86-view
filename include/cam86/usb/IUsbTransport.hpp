@@ -34,5 +34,8 @@ public:
 };
 
 [[nodiscard]] std::unique_ptr<IUsbTransport> makeLibusbFtdiTransport();
+#ifdef _WIN32
+[[nodiscard]] std::unique_ptr<IUsbTransport> makeD2xxFtdiTransport();
+#endif
 
 } // namespace cam86

@@ -44,7 +44,7 @@ cmake --build build/windows --config Release --parallel
 ctest --test-dir build/windows -C Release --output-on-failure
 ```
 
-`vcpkg.json` 会安装 libusb。程序位于 `build/windows/Release/cam86-view.exe`。如果只想先运行模拟相机，可加 `-DCAM86_ENABLE_LIBUSB=OFF`，不需要 vcpkg。
+程序位于 `build/windows/Release/cam86-view.exe`。Windows 真机默认使用 D2XX，可加 `-DCAM86_ENABLE_LIBUSB=OFF` 构建，不需要 vcpkg；Linux 真机使用 libusb。
 
 ### Linux（Debian/Ubuntu）
 
@@ -78,7 +78,9 @@ cmake --build build --parallel
 
 ### Windows 驱动注意事项
 
-libusb 不能直接通过 FTDI 的 D2XX 内核驱动访问设备。需要用 Zadig 把 CAM86 的 FT2232H 接口切换为 WinUSB（两路接口都必须可被 libusb claim）。切换后旧 D2XX 软件将暂时不能使用；要恢复旧软件，需要重新安装 FTDI D2XX 驱动。不要对电脑上其他 FTDI 设备误操作。
+Windows 默认使用 D2XX，通过现有 FTDI 驱动打开同一相机的 `CAM86A/CAM86B` 通道，无需通过 Zadig 切换到 WinUSB。程序优先加载系统目录的 `ftd2xx.dll`，再查找 EXE 同目录；DLL 架构必须与程序一致，旧 EXE 附带的 32 位 DLL 不能用于 64 位客户端。连接前关闭其他占用相机的程序。
+
+参考文件注意：`ref/cam8_view-src` 是 CAM8 工程，打开 `CAM8A/CAM8B` 并使用另一套控制时序；可用的 `ref/cam86-bin/cam86-view-01.exe` 包含 `CAM86A/CAM86B`。不能将 CAM8 初始化和采集协议直接套用到 CAM86。
 
 ### Linux 权限
 

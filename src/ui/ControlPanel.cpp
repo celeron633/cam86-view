@@ -20,7 +20,7 @@ void ControlPanel::draw(AppState& state) {
 
     ImGui::BeginDisabled(connected || busy);
     int backend = state.simulation ? 0 : 1;
-    const char* backends[] = {"Demo camera", "CAM86 / libusb"};
+    const char* backends[] = {"Demo camera", hardwareBackendName()};
     ImGui::SetNextItemWidth(-1);
     if (ImGui::Combo("##backend", &backend, backends, 2)) {
         state.simulation = backend == 0;

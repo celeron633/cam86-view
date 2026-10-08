@@ -111,8 +111,8 @@ int Application::run() {
     loadSettings(config, state);
     state.addLog("CAM86-View v0.2 ready");
     state.addLog(state.camera.hardwareAvailable()
-        ? "libusb hardware backend is available"
-        : "libusb backend is not built; demo camera remains available");
+        ? std::string("Hardware backend: ") + hardwareBackendName()
+        : "Hardware backend is not built; demo camera remains available");
     ui::MainWindow mainWindow(state);
 
     while (!glfwWindowShouldClose(window)) {
@@ -147,4 +147,3 @@ int Application::run() {
 }
 
 } // namespace cam86
-

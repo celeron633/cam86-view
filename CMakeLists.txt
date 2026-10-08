@@ -74,6 +74,7 @@ add_library(cam86_core
   src/image/FitsWriter.cpp
   src/image/ImageProcessor.cpp
   src/usb/FtdiProtocol.cpp
+  src/usb/D2xxFtdiTransport.cpp
   src/usb/LibusbFtdiTransport.cpp
   src/util/Config.cpp
 )
