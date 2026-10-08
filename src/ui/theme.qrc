@@ -1,0 +1,9 @@
+<RCC>
+  <qresource prefix="/ui">
+    <file>theme.qss</file>
+    <file>icons/chevron.svg</file>
+    <file>icons/chevron-up.svg</file>
+    <file>icons/check.svg</file>
+    <file>icons/radio.svg</file>
+  </qresource>
+</RCC>

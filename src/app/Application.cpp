@@ -52,7 +52,7 @@ int Application::run(int argc, char** argv) {
     AppState state;
     Config config(std::filesystem::current_path() / "cam86.ini");
     loadSettings(config, state);
-    state.addLog("CAM86-View v0.2 ready (Qt)");
+    state.addLog("CAM86-View v0.2 ready");
     state.addLog(state.camera.hardwareAvailable()
         ? std::string("Hardware backend: ") + hardwareBackendName()
         : "Hardware backend is not built; demo camera remains available");

@@ -26,11 +26,13 @@ void ImagePanel::refresh() {
 QRect ImagePanel::imageRect() const {
     const QSize source = image_.isNull() ? QSize(3000, 2000) : image_.size();
     const QSize size = source.scaled(this->size(), Qt::KeepAspectRatio);
-    return QRect(QPoint((width() - size.width()) / 2, (height() - size.height()) / 2), size);
+    return QRect(QPoint((width() - size.width()) / 2,
+                        view_ == View::Main ? 0 : (height() - size.height()) / 2), size);
 }
 void ImagePanel::paintEvent(QPaintEvent*) {
     QPainter painter(this);
-    painter.fillRect(rect(), QColor(28, 31, 35));
+    painter.fillRect(rect(), view_ == View::Main ? palette().color(QPalette::Window) : QColor(28, 31, 35));
+    if (view_ == View::Main) painter.fillRect(imageRect(), QColor(28, 31, 35));
     if (view_ == View::Histogram) {
         const auto& processor = state_.image;
         const std::array<const std::array<std::uint32_t, 256>*, 3> channels{

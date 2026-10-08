@@ -57,11 +57,13 @@ else()
 endif()
 
 add_library(cam86_ui
+  src/ui/theme.qrc
   src/ui/ControlPanel.cpp
   src/ui/ImagePanel.cpp
   src/ui/LogPanel.cpp
   src/ui/MainWindow.cpp
 )
+set_target_properties(cam86_ui PROPERTIES AUTORCC ON)
 target_include_directories(cam86_ui PUBLIC include src)
 target_link_libraries(cam86_ui PUBLIC cam86_core Qt6::Widgets)
 

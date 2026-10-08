@@ -6,14 +6,21 @@
 #include "ui/ImagePanel.hpp"
 #include "ui/LogPanel.hpp"
 #include <QFormLayout>
+#include <QFile>
 #include <QGroupBox>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QSlider>
 #include <QLabel>
 #include <QSplitter>
 #include <QStatusBar>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <stdexcept>
+
+static void initializeThemeResources() {
+    Q_INIT_RESOURCE(theme);
+}
 
 #include <algorithm>
 #include <chrono>
@@ -27,13 +34,26 @@
 namespace cam86::ui {
 
 MainWindow::MainWindow(AppState& state) : state_(state) {
-    setWindowTitle("CAM86-View v0.2 - Qt");
-    resize(1180, 780);
+    setWindowTitle("CAM86-View v0.2");
+    initializeThemeResources();
+    QFile stylesheet(":/ui/theme.qss");
+    if (!stylesheet.open(QIODevice::ReadOnly)) throw std::runtime_error("Could not load the interface theme");
+    setStyleSheet(QString::fromUtf8(stylesheet.readAll()));
+    auto colors = palette();
+    colors.setColor(QPalette::Window, QColor("#eef1f5"));
+    colors.setColor(QPalette::WindowText, QColor("#283548"));
+    setPalette(colors);
+    resize(1180, 720);
     setMinimumSize(960, 600);
     auto* columns = new QSplitter(Qt::Horizontal, this);
+    columns->setChildrenCollapsible(false);
+    columns->setHandleWidth(5);
     setCentralWidget(columns);
     auto* left = new QWidget;
+    left->setObjectName("imageColumn");
     auto* leftLayout = new QVBoxLayout(left);
+    leftLayout->setContentsMargins(6, 6, 6, 6);
+    leftLayout->setSpacing(6);
     mainImage_ = new ImagePanel(state, ImagePanel::View::Main);
     mainImage_->setObjectName("mainImage");
     leftLayout->addWidget(mainImage_, 1);
@@ -60,9 +80,12 @@ MainWindow::MainWindow(AppState& state) : state_(state) {
     leftLayout->addLayout(adjustments);
     columns->addWidget(left);
     auto* middle = new QSplitter(Qt::Vertical);
+    middle->setChildrenCollapsible(false);
+    middle->setHandleWidth(4);
     const auto group = [middle](const QString& title, QWidget* widget) {
         auto* box = new QGroupBox(title);
         auto* layout = new QVBoxLayout(box);
+        layout->setContentsMargins(5, 5, 5, 5);
         layout->addWidget(widget);
         middle->addWidget(box);
     };
@@ -72,15 +95,19 @@ MainWindow::MainWindow(AppState& state) : state_(state) {
     group("Log", log_);
     group("Selection - 50 x 50", crop_);
     group("RGB histogram (log scale)", histogram_);
-    middle->setSizes({270,250,160});
+    middle->setSizes({255,260,150});
     columns->addWidget(middle);
     controls_ = new ControlPanel(state);
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
-    scroll->setMinimumWidth(280);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->setWidget(controls_);
     columns->addWidget(scroll);
-    columns->setSizes({600,260,300});
+    controls_->ensurePolished();
+    scroll->setMinimumWidth(std::max(250, controls_->minimumSizeHint().width() +
+        scroll->verticalScrollBar()->sizeHint().width()));
+    columns->setSizes({660,235,275});
     columns->setStretchFactor(0, 1);
     columns->setStretchFactor(1, 0);
     columns->setStretchFactor(2, 0);
